@@ -1,0 +1,47 @@
+-- 1. SET ENVIRONMENT TO ROOT CONTAINER (CDB)
+-- You must be logged in as SYSDBA (e.g., sqlplus / as sysdba)
+
+-- Naming convention based on project requirements:
+DEFINE PDB_NAME = 'STIS_PDB'
+DEFINE ADMIN_PASSWORD = 'Pdb123456'
+
+-- Check Archive Log status (CRITICAL FOR AUDITING IN PHASE VII)
+SELECT log_mode FROM v$database;
+
+-- 2. CREATE THE PLUGGABLE DATABASE (PDB)
+-- Removed the problematic FILE_NAME_CONVERT clause.
+-- Using CREATE_FILE_DEST for OMF compatibility, forcing files to the default location.
+CREATE PLUGGABLE DATABASE &PDB_NAME
+  ADMIN USER pdb_admin IDENTIFIED BY &ADMIN_PASSWORD
+  CREATE_FILE_DEST='/opt/oracle/oradata/XE/'
+  DEFAULT TABLESPACE users
+  STORAGE UNLIMITED;
+
+-- 3. OPEN THE NEW PDB
+ALTER PLUGGABLE DATABASE &PDB_NAME OPEN;
+
+-- 4. SWITCH TO THE NEW PDB TO CREATE TABLESPACES
+ALTER SESSION SET CONTAINER = &PDB_NAME;
+
+-- 5. CREATE DEDICATED TABLESPACES (REQUIRED)
+-- Using the standard DB_FILES_PATH for a robust path definition.
+
+-- 5a. Data Tablespace
+CREATE TABLESPACE STIS_DATA_TS
+  DATAFILE SIZE 100M
+  AUTOEXTEND ON NEXT 50M MAXSIZE 5G
+  LOGGING
+  ONLINE;
+
+-- 5b. Index Tablespace
+CREATE TABLESPACE STIS_INDEX_TS
+  DATAFILE SIZE 50M
+  AUTOEXTEND ON NEXT 25M MAXSIZE 2G
+  LOGGING
+  ONLINE;
+
+-- 6. VERIFY TABLESPACE CREATION
+SELECT tablespace_name, file_name, autoextensible FROM dba_data_files;
+
+-- 7. RETURN TO CDB
+ALTER SESSION SET CONTAINER = CDB$ROOT;
