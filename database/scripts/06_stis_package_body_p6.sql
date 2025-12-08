@@ -34,45 +34,43 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
     AS
         v_current_stock FARM_SUPPLIES.CURRENT_STOCK%TYPE;
     BEGIN
-        -- 1. Check Stock and Lock Row (Step 5 in BPMN)
+        -- 1. Check Stock and Lock Row (Atomic Start)
         SELECT CURRENT_STOCK INTO v_current_stock
         FROM FARM_SUPPLIES
         WHERE SUPPLY_ID = p_supply_id
         FOR UPDATE OF CURRENT_STOCK; 
 
-        -- 2. Decision Point: Is there enough stock? (Step 6 in BPMN)
+        -- 2. Decision Point: Is there enough stock?
         IF v_current_stock < p_seeds_consumed THEN
-            -- If No -> Rollback transaction and raise custom exception
             RAISE e_stock_out;
         END IF;
 
-        -- 3. Deduct Inventory (Step 6: If Yes)
+        -- 3. Deduct Inventory 
         UPDATE FARM_SUPPLIES
         SET CURRENT_STOCK = CURRENT_STOCK - p_seeds_consumed
         WHERE SUPPLY_ID = p_supply_id;
 
-        -- 4. Calculate Harvest Date (Step 8: Call Function)
-        x_harvest_date := STIS_PKG.get_expected_harvest_date(SYSDATE, p_crop_id);
+        -- 4. Calculate Harvest Date (Call Innovation Function)
+        -- Using TRUNC(SYSDATE) for cleaner date storage without time component
+        x_harvest_date := STIS_PKG.get_expected_harvest_date(TRUNC(SYSDATE), p_crop_id);
 
-        -- 5. Insert New Batch (Step 7)
+        -- 5. Insert New Batch (Atomic Transaction continues)
         INSERT INTO PLANTING_BATCHES (
             CROP_ID, SUPPLY_ID, PLANTING_DATE, AREA_PLANTED_SQM, SEEDS_CONSUMED, STATUS, EXPECTED_HARVEST_DATE
         )
         VALUES (
-            p_crop_id, p_supply_id, SYSDATE, p_area_planted, p_seeds_consumed, 'PLANTED', x_harvest_date
+            p_crop_id, p_supply_id, TRUNC(SYSDATE), p_area_planted, p_seeds_consumed, 'PLANTED', x_harvest_date
         )
         RETURNING BATCH_ID INTO x_new_batch_id; -- Get the auto-generated ID
 
-        -- 6. Success (Step 9)
+        -- 6. Success
         COMMIT;
 
     EXCEPTION
         WHEN e_stock_out THEN
-            -- Custom exception handling
             ROLLBACK;
             RAISE_APPLICATION_ERROR(-20002, 'Inventory Stock-Out: Cannot deduct ' || p_seeds_consumed || ' from supply ID ' || p_supply_id || '.');
         WHEN OTHERS THEN
-            -- Generic exception handling
             ROLLBACK;
             RAISE_APPLICATION_ERROR(-20001, 'Error during new batch recording: ' || SQLERRM);
     END record_new_batch;
@@ -167,13 +165,15 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
         p_num_batches IN NUMBER DEFAULT 5
     ) RETURN t_batch_list
     AS
-        -- Define Explicit Cursor using a Window Function (ROW_NUMBER)
+        -- Define Explicit Cursor using Window Functions (Enhanced to include RANK)
         CURSOR c_top_batches IS
             SELECT 
                 BATCH_ID,
                 CROP_NAME,
                 AREA_PLANTED_SQM,
-                ROW_NUMBER() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS area_rank
+                -- Demonstrate multiple Window Functions
+                ROW_NUMBER() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS row_num,
+                RANK() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS area_rank 
             FROM PLANTING_BATCHES pb
             JOIN CROP_TYPES ct ON pb.CROP_ID = ct.CROP_ID
             WHERE pb.STATUS IN ('PLANTED', 'GROWING');

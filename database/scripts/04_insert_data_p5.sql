@@ -1,6 +1,4 @@
 -- Connect as the project user: STIS_ADMIN_28179
-SET ECHO ON
-SET VERIFY OFF
 SET SERVEROUTPUT ON
 
 -- 1. CLEANUP SECTION
@@ -46,7 +44,7 @@ CREATE TABLE FARM_SUPPLIES (
 CREATE TABLE PLANTING_BATCHES (
     BATCH_ID                    NUMBER(10)          PRIMARY KEY,
     CROP_ID                     NUMBER(10)          NOT NULL,
-    SUPPLY_ID                   NUMBER(10)          NOT NULL, -- <<< FIX: ADDED SUPPLY_ID COLUMN
+    SUPPLY_ID                   NUMBER(10)          NOT NULL, 
     PLANTING_DATE               DATE                NOT NULL,
     EXPECTED_HARVEST_DATE       DATE,
     AREA_PLANTED_SQM            NUMBER(10, 2)       NOT NULL,
@@ -54,7 +52,7 @@ CREATE TABLE PLANTING_BATCHES (
     STATUS                      VARCHAR2(20)        NOT NULL,
 
     CONSTRAINT fk_batch_crop FOREIGN KEY (CROP_ID) REFERENCES CROP_TYPES(CROP_ID),
-    CONSTRAINT fk_batch_supply FOREIGN KEY (SUPPLY_ID) REFERENCES FARM_SUPPLIES(SUPPLY_ID), -- <<< FIX: ADDED FK CONSTRAINT
+    CONSTRAINT fk_batch_supply FOREIGN KEY (SUPPLY_ID) REFERENCES FARM_SUPPLIES(SUPPLY_ID), 
     CONSTRAINT chk_batch_status CHECK (STATUS IN ('PLANTED', 'GROWING', 'HARVESTED', 'FAILED')),
     CONSTRAINT chk_batch_area CHECK (AREA_PLANTED_SQM > 0),
     CONSTRAINT chk_batch_seeds CHECK (SEEDS_CONSUMED > 0)
@@ -97,7 +95,7 @@ BEGIN
         v_date := DATE '2024-01-01' + (i * 5);
         
         INSERT INTO PLANTING_BATCHES (BATCH_ID, CROP_ID, SUPPLY_ID, PLANTING_DATE, AREA_PLANTED_SQM, SEEDS_CONSUMED, STATUS)
-        VALUES (seq_batch_id.NEXTVAL, v_crop_id_maize, v_supply_id_maize, v_date, -- <<< FIX: ADDED SUPPLY_ID (100)
+        VALUES (seq_batch_id.NEXTVAL, v_crop_id_maize, v_supply_id_maize, v_date, 
                 DBMS_RANDOM.VALUE(100, 500), 
                 DBMS_RANDOM.VALUE(5, 20),    
                 CASE 
@@ -112,7 +110,7 @@ BEGIN
         v_date := DATE '2024-02-15' + (i * 6);
         
         INSERT INTO PLANTING_BATCHES (BATCH_ID, CROP_ID, SUPPLY_ID, PLANTING_DATE, AREA_PLANTED_SQM, SEEDS_CONSUMED, STATUS, EXPECTED_HARVEST_DATE)
-        VALUES (seq_batch_id.NEXTVAL, v_crop_id_beans, v_supply_id_beans, v_date, -- <<< FIX: ADDED SUPPLY_ID (102)
+        VALUES (seq_batch_id.NEXTVAL, v_crop_id_beans, v_supply_id_beans, v_date, 
                 DBMS_RANDOM.VALUE(50, 300), 
                 DBMS_RANDOM.VALUE(3, 15),
                 CASE 
@@ -145,7 +143,7 @@ SELECT 'Total Rows in Tables' AS Table_Name, SUM(cnt) AS Total_Rows FROM (
 SELECT 
     b.BATCH_ID,
     c.CROP_NAME,
-    s.ITEM_NAME AS SEED_SUPPLY, -- New column use
+    s.ITEM_NAME AS SEED_SUPPLY,
     b.PLANTING_DATE,
     b.STATUS
 FROM 
@@ -153,7 +151,7 @@ FROM
 JOIN 
     CROP_TYPES c ON b.CROP_ID = c.CROP_ID
 JOIN 
-    FARM_SUPPLIES s ON b.SUPPLY_ID = s.SUPPLY_ID -- New JOIN
+    FARM_SUPPLIES s ON b.SUPPLY_ID = s.SUPPLY_ID 
 WHERE 
     b.STATUS = 'PLANTED'
 FETCH FIRST 5 ROWS ONLY;
