@@ -57,3 +57,16 @@ SELECT tablespace_name, file_name, autoextensible FROM dba_data_files;
 
 -- 7. RETURN TO CDB
 -- ALTER SESSION SET CONTAINER = CDB$ROOT;
+
+
+-- Screenshot Proof
+SELECT 
+    TABLESPACE_NAME, 
+    FILE_NAME,
+    AUTOEXTENSIBLE, 
+    MAXBYTES / 1024 / 1024 / 1024 AS MAX_SIZE_GB, 
+    INCREMENT_BY * (SELECT value FROM V$PARAMETER WHERE name = 'db_block_size') / 1024 / 1024 AS NEXT_EXTENT_MB 
+FROM 
+    DBA_DATA_FILES 
+WHERE 
+    TABLESPACE_NAME = 'STIS_DATA_TS';

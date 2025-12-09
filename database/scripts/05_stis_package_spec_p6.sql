@@ -11,7 +11,6 @@ CREATE OR REPLACE PACKAGE STIS_PKG AS
     ) RETURN DATE;
     
     -- Procedure 1 (Optimization): Atomic transaction for planting a new batch
-    -- This follows the exact flow of your Phase II BPMN.
     PROCEDURE record_new_batch (
         p_crop_id IN NUMBER,
         p_supply_id IN NUMBER,
@@ -21,7 +20,7 @@ CREATE OR REPLACE PACKAGE STIS_PKG AS
         x_harvest_date OUT DATE
     );
 
-    -- Procedure 2: Updates a batch's status (e.g., to 'HARVESTING')
+    -- Procedure 2: Updates a batch's status
     PROCEDURE update_batch_status (
         p_batch_id IN NUMBER,
         p_new_status IN VARCHAR2
@@ -33,23 +32,24 @@ CREATE OR REPLACE PACKAGE STIS_PKG AS
         p_quantity_added IN NUMBER
     );
     
-    -- Function 2 (Validation/Lookup): Retrieves the current stock level for validation
+    -- Function 2 (Validation/Lookup): Retrieves the current stock level
     FUNCTION check_supply_stock (
         p_supply_id IN NUMBER
     ) RETURN NUMBER;
     
-    -- Function 3 (Calculation): Calculates the actual yield rate achieved for a completed batch
+    -- Function 3 (Calculation): Calculates the actual yield rate
     FUNCTION calculate_yield_rate (
         p_batch_id IN NUMBER,
         p_actual_harvest_kg IN NUMBER
     ) RETURN NUMBER;
 
-    -- Function 4 (Advanced/Cursor): Uses an Explicit Cursor and Bulk Fetch for BI prep
+-- Function 4 (Advanced/Cursor): Uses an Explicit Cursor and Bulk Fetch for BI prep
     TYPE t_batch_record IS RECORD (
-        batch_id NUMBER,
+        batch_id NUMBER(10), 
         crop_name VARCHAR2(50),
-        area_planted NUMBER,
-        area_rank NUMBER
+        area_planted_value NUMBER(10, 2), -- *** CRITICAL FINAL FIX: Renamed to avoid ambiguity ***
+        row_number_rank NUMBER(10), 
+        area_rank NUMBER(10)        
     );
     TYPE t_batch_list IS TABLE OF t_batch_record;
 

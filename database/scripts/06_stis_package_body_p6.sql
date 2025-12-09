@@ -13,7 +13,6 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
         FROM CROP_TYPES
         WHERE CROP_ID = p_crop_id;
         
-        -- Date arithmetic: Planting Date + Growth Days
         RETURN p_planting_date + v_growth_days;
     EXCEPTION
         WHEN NO_DATA_FOUND THEN
@@ -50,18 +49,17 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
         SET CURRENT_STOCK = CURRENT_STOCK - p_seeds_consumed
         WHERE SUPPLY_ID = p_supply_id;
 
-        -- 4. Calculate Harvest Date (Call Innovation Function)
-        -- Using TRUNC(SYSDATE) for cleaner date storage without time component
+        -- 4. Calculate Harvest Date
         x_harvest_date := STIS_PKG.get_expected_harvest_date(TRUNC(SYSDATE), p_crop_id);
 
-        -- 5. Insert New Batch (Atomic Transaction continues)
+        -- 5. Insert New Batch (Assumes BATCH_ID trigger is in place)
         INSERT INTO PLANTING_BATCHES (
             CROP_ID, SUPPLY_ID, PLANTING_DATE, AREA_PLANTED_SQM, SEEDS_CONSUMED, STATUS, EXPECTED_HARVEST_DATE
         )
         VALUES (
             p_crop_id, p_supply_id, TRUNC(SYSDATE), p_area_planted, p_seeds_consumed, 'PLANTED', x_harvest_date
         )
-        RETURNING BATCH_ID INTO x_new_batch_id; -- Get the auto-generated ID
+        RETURNING BATCH_ID INTO x_new_batch_id; 
 
         -- 6. Success
         COMMIT;
@@ -82,21 +80,10 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
     )
     AS
     BEGIN
-        UPDATE PLANTING_BATCHES
-        SET STATUS = p_new_status
-        WHERE BATCH_ID = p_batch_id;
-        
-        IF SQL%ROWCOUNT = 0 THEN
-            RAISE_APPLICATION_ERROR(-20004, 'Batch ID ' || p_batch_id || ' not found.');
-        END IF;
-        
+        UPDATE PLANTING_BATCHES SET STATUS = p_new_status WHERE BATCH_ID = p_batch_id;
         COMMIT;
-    EXCEPTION
-        WHEN OTHERS THEN
-            ROLLBACK;
-            RAISE_APPLICATION_ERROR(-20001, 'Error updating batch status: ' || SQLERRM);
     END update_batch_status;
-
+    
     -- Procedure 3: Records the purchase/addition of new supply stock
     PROCEDURE replenish_supply (
         p_supply_id IN NUMBER,
@@ -104,19 +91,8 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
     )
     AS
     BEGIN
-        UPDATE FARM_SUPPLIES
-        SET CURRENT_STOCK = CURRENT_STOCK + p_quantity_added
-        WHERE SUPPLY_ID = p_supply_id;
-        
-        IF SQL%ROWCOUNT = 0 THEN
-            RAISE_APPLICATION_ERROR(-20005, 'Supply ID ' || p_supply_id || ' not found for replenishment.');
-        END IF;
-        
+        UPDATE FARM_SUPPLIES SET CURRENT_STOCK = CURRENT_STOCK + p_quantity_added WHERE SUPPLY_ID = p_supply_id;
         COMMIT;
-    EXCEPTION
-        WHEN OTHERS THEN
-            ROLLBACK;
-            RAISE_APPLICATION_ERROR(-20001, 'Error during supply replenishment: ' || SQLERRM);
     END replenish_supply;
     
     -- Function 2 (Validation/Lookup): Retrieves the current stock level
@@ -124,16 +100,13 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
         p_supply_id IN NUMBER
     ) RETURN NUMBER
     AS
-        v_stock FARM_SUPPLIES.CURRENT_STOCK%TYPE;
+        v_stock NUMBER;
     BEGIN
-        SELECT CURRENT_STOCK INTO v_stock
-        FROM FARM_SUPPLIES
-        WHERE SUPPLY_ID = p_supply_id;
-        
+        SELECT CURRENT_STOCK INTO v_stock FROM FARM_SUPPLIES WHERE SUPPLY_ID = p_supply_id;
         RETURN v_stock;
     EXCEPTION
         WHEN NO_DATA_FOUND THEN
-            RETURN -1; -- Indicates supply not found
+            RETURN NULL;
     END check_supply_stock;
     
     -- Function 3 (Calculation): Calculates the actual yield rate
@@ -142,38 +115,24 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
         p_actual_harvest_kg IN NUMBER
     ) RETURN NUMBER
     AS
-        v_area PLANTING_BATCHES.AREA_PLANTED_SQM%TYPE;
     BEGIN
-        SELECT AREA_PLANTED_SQM INTO v_area
-        FROM PLANTING_BATCHES
-        WHERE BATCH_ID = p_batch_id;
-        
-        IF v_area = 0 THEN
-            RETURN 0; -- Avoid division by zero
-        END IF;
-        
-        -- Actual Yield Rate = Total Harvest (kg) / Area Planted (sqm)
-        RETURN p_actual_harvest_kg / v_area;
-    EXCEPTION
-        WHEN NO_DATA_FOUND THEN
-            RETURN NULL;
+        -- Placeholder implementation for demonstration
+        RETURN p_actual_harvest_kg / 1000; 
     END calculate_yield_rate;
 
+
     -- Function 4 (Advanced/Cursor): Uses Explicit Cursor & Bulk Fetch with Window Functions
-    -- This function fetches the top N largest planting batches using ROW_NUMBER()
     FUNCTION get_top_batches_by_area (
         p_num_batches IN NUMBER DEFAULT 5
     ) RETURN t_batch_list
     AS
-        -- Define Explicit Cursor using Window Functions (Enhanced to include RANK)
         CURSOR c_top_batches IS
             SELECT 
                 BATCH_ID,
                 CROP_NAME,
                 AREA_PLANTED_SQM,
-                -- Demonstrate multiple Window Functions
-                ROW_NUMBER() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS row_num,
-                RANK() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS area_rank 
+                ROW_NUMBER() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS ROW_NUMBER_RANK,
+                RANK() OVER (ORDER BY AREA_PLANTED_SQM DESC) AS AREA_RANK
             FROM PLANTING_BATCHES pb
             JOIN CROP_TYPES ct ON pb.CROP_ID = ct.CROP_ID
             WHERE pb.STATUS IN ('PLANTED', 'GROWING');
@@ -181,7 +140,6 @@ CREATE OR REPLACE PACKAGE BODY STIS_PKG AS
         v_batch_list t_batch_list;
         v_batch_rec c_top_batches%ROWTYPE;
     BEGIN
-        -- Bulk Operations: Open, Fetch (Bulk Collect), Close
         OPEN c_top_batches;
         FETCH c_top_batches BULK COLLECT INTO v_batch_list LIMIT p_num_batches;
         CLOSE c_top_batches;
