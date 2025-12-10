@@ -7,10 +7,11 @@ WHENEVER SQLERROR EXIT FAILURE
 DROP TRIGGER trg_crop_dml_restriction;
 DROP TRIGGER trg_batch_dml_audit;
 DROP FUNCTION check_restriction_rule;
-DROP FUNCTION log_dml_attempt;
+DROP PROCEDURE log_dml_attempt; 
+DROP FUNCTION log_dml_attempt; 
 DROP TABLE PUBLIC_HOLIDAYS CASCADE CONSTRAINTS;
 DROP TABLE DML_AUDIT_LOG CASCADE CONSTRAINTS;
-DROP SEQUENCE seq_holiday_id; -- Assuming a sequence for holidays existed
+-- Removed: DROP SEQUENCE seq_holiday_id; (Confirmed not in use)
 
 -- Re-establish SQL Error Handling
 WHENEVER SQLERROR EXIT FAILURE
@@ -30,29 +31,30 @@ COMMIT;
 CREATE TABLE DML_AUDIT_LOG (
     LOG_ID          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     TRANSACTION_DATE TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP,
-    USER_ACTION     VARCHAR2(10) NOT NULL, -- INSERT, UPDATE, DELETE
+    USER_ACTION     VARCHAR2(10) NOT NULL,
     TABLE_NAME      VARCHAR2(50) NOT NULL,
     USER_NAME       VARCHAR2(50) DEFAULT USER,
-    STATUS          VARCHAR2(10) NOT NULL, -- ALLOWED or DENIED
+    STATUS          VARCHAR2(10) NOT NULL,
     DETAILS         VARCHAR2(255)
 ) TABLESPACE STIS_DATA_TS;
 
--- 4. AUDIT LOGGING FUNCTION
-CREATE OR REPLACE FUNCTION log_dml_attempt (
+-- 4. AUDIT LOGGING PROCEDURE (FIX: Changed from FUNCTION to PROCEDURE)
+CREATE OR REPLACE PROCEDURE log_dml_attempt (
     p_action    IN VARCHAR2,
     p_table     IN VARCHAR2,
     p_status    IN VARCHAR2,
     p_details   IN VARCHAR2 DEFAULT NULL
-) RETURN NUMBER
+) 
 IS
+    PRAGMA AUTONOMOUS_TRANSACTION;
 BEGIN
     INSERT INTO DML_AUDIT_LOG (USER_ACTION, TABLE_NAME, STATUS, DETAILS)
     VALUES (p_action, p_table, p_status, p_details);
-    RETURN 1; -- Indicate success
+    COMMIT; -- Necessary for autonomous transactions
 END log_dml_attempt;
 /
 
--- 5. RESTRICTION CHECK FUNCTION (The Core Business Rule)
+-- 5. RESTRICTION CHECK FUNCTION 
 CREATE OR REPLACE FUNCTION check_restriction_rule 
 RETURN BOOLEAN
 IS
@@ -60,48 +62,41 @@ IS
     v_is_holiday    NUMBER;
     v_current_date  DATE := TRUNC(SYSDATE);
 BEGIN
-    -- Check 1: Is it a Weekend? (SAT/SUN)
     SELECT DECODE(TO_CHAR(v_current_date, 'DY', 'NLS_DATE_LANGUAGE=ENGLISH'), 'SAT', 'Y', 'SUN', 'Y', 'N')
     INTO v_is_weekend 
     FROM DUAL;
 
-    -- Check 2: Is it a Public Holiday? (upcoming month only)
     SELECT COUNT(*)
     INTO v_is_holiday
     FROM PUBLIC_HOLIDAYS
     WHERE HOLIDAY_DATE = v_current_date;
 
-    -- CRITICAL BUSINESS RULE: DML is ALLOWED only if it IS a weekend (Sat/Sun) AND NOT a holiday.
     IF v_is_weekend = 'Y' AND v_is_holiday = 0 THEN
-        RETURN TRUE; -- ALLOWED
+        RETURN TRUE; 
     ELSE 
-        RETURN FALSE; -- DENIED (Weekday OR Holiday)
+        RETURN FALSE; 
     END IF;
 END check_restriction_rule;
 /
 
--- 6. SIMPLE TRIGGER: Enforce Restriction Rule (BEFORE DML on CROP_TYPES)
--- Logs DENIED attempts and raises error.
+-- 6. SIMPLE TRIGGER: Enforce Restriction Rule 
 CREATE OR REPLACE TRIGGER trg_crop_dml_restriction
 BEFORE INSERT OR UPDATE OR DELETE ON CROP_TYPES
 DECLARE
 BEGIN
     IF NOT check_restriction_rule THEN
-        -- Log the DENIED attempt
         log_dml_attempt(
             p_action => CASE WHEN INSERTING THEN 'INSERT' WHEN UPDATING THEN 'UPDATE' ELSE 'DELETE' END,
             p_table  => 'CROP_TYPES',
             p_status => 'DENIED',
             p_details => 'DML restricted on Weekday/Holiday.'
         );
-        -- Raise the error to stop the transaction
         RAISE_APPLICATION_ERROR(-20010, 'Business Rule Violation: DML is restricted to weekends (non-holiday).');
     END IF;
 END trg_crop_dml_restriction;
 /
 
--- 7. COMPOUND TRIGGER: Comprehensive Audit Logging (AFTER DML on PLANTING_BATCHES)
--- Logs ALLOWED attempts.
+-- 7. COMPOUND TRIGGER: Comprehensive Audit Logging 
 CREATE OR REPLACE TRIGGER trg_batch_dml_audit
 FOR INSERT OR UPDATE OR DELETE ON PLANTING_BATCHES
 COMPOUND TRIGGER
@@ -109,7 +104,6 @@ COMPOUND TRIGGER
 
     AFTER EACH ROW IS
     BEGIN
-        -- Determine action type only once
         IF INSERTING THEN
             v_action := 'INSERT';
         ELSIF UPDATING THEN
@@ -121,7 +115,6 @@ COMPOUND TRIGGER
 
     AFTER STATEMENT IS
     BEGIN
-        -- Log the successful, allowed transaction
         log_dml_attempt(
             p_action => v_action,
             p_table  => 'PLANTING_BATCHES',
