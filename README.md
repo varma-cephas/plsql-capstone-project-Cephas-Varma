@@ -1,15 +1,14 @@
 # plsql-capstone-project-STIS-VarmaCephas
-**Project Name:** Seed-to-Harvest Tracking and Inventory System (STIS)
-**Student:** Cephas Varma (28179)
-**Technology:** Oracle Database, PL/SQL
+- Project Name: Seed-to-Harvest Tracking and Inventory System (STIS)
+- Student Name and ID: Varma Cephas V. (28179)
+- Technology: Oracle Database, PL/SQL
 
----
 
 ## 1. Project Overview and Problem Statement (Phase I)
 
 The **Seed-to-Harvest Tracking and Inventory System (STIS)** is designed to provide small farming operations with a reliable, centralized system for managing crop cycles and critical supply inventory.
 
-### Goal
+### Key Objective
 
 To replace error-prone manual records with a **centralized source of truth** in an Oracle Database, enforcing data integrity and automating key logistical calculations.
 
@@ -17,8 +16,6 @@ To replace error-prone manual records with a **centralized source of truth** in 
 
 1.  **Inventory Inaccuracy (Optimization Focus):** Manual tracking leads to stock-outs or costly over-stocking of seeds and fertilizer.
 2.  **Poor Planning (Innovation Focus):** Lack of centralized data prevents accurate prediction of harvest dates, causing logistical and sales delays.
-
----
 
 ## 2. Core PL/SQL Components (Phase II & VI)
 
@@ -31,7 +28,6 @@ The system enforces business logic and automation via a PL/SQL Package (`STIS_PK
 | **Auditing Triggers** | **Security/Phase VII** | `STIS_AUDIT_TRG` logs all changes (Update/Delete) to the critical `PLANTING_BATCHES` table, ensuring a complete, historical audit trail of all crop life-cycle events. |
 | **Advanced Features** | **Phase VI/VII** | Includes an Explicit Cursor and Bulk Fetch to demonstrate data analysis features (e.g., retrieving the largest planted batches for BI). |
 
----
 
 ## 3. Database Architecture (Phase III)
 
@@ -61,4 +57,10 @@ This project requires an Oracle Database 12c (or higher). The setup is done in t
     * Connect to the newly created PDB (`STIS_PDB`) as `SYSDBA`.
     * Execute the script: `database/scripts/02_user_and_permissions.sql`.
 
-Once complete, all subsequent SQL (Phase V, VI, VII) should be executed while logged in as the project user: `STIS_ADMIN_28179`.
+Once completed, all subsequent PL/SQL in the scripts folder should be executed while logged in as the user: `STIS_ADMIN_28179`.
+
+
+### Links to Documentation
+- [Logical Database Design](./database/documentation/logical_database_design.md "Logical Database Design") 
+- [Business Process Model](./database/documentation/business_process_model.md "Business Process Model") 
+
