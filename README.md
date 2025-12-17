@@ -1,4 +1,4 @@
-# PL/SQL-Capstone-Croject-STIS-VarmaCephas
+# PL/SQL-Capstone-Project-STIS-VarmaCephas
 - Project Name: Seed-to-Harvest Tracking and Inventory System (STIS)
 - Student Name and ID: Varma Cephas V. (28179)
 - Technology: Oracle Database, PL/SQL
